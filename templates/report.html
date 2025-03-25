@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Scout Suite Report - {{ account_name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2>Scout Suite Report</h2>
+        <p class="lead">
+            Account: {{ account_name }}<br>
+            Generated: {{ timestamp }}
+        </p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">EC2 Summary</h5>
+                <p class="card-text">
+                    Total Instances: {{ ec2_count }}<br>
+                    Running Instances: {{ running_ec2_count }}
+                </p>
+                <a href="{{ url_for('view_ec2', account_id=report_data.account_id) }}" class="btn btn-primary">View Details</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">S3 Summary</h5>
+                <p class="card-text">
+                    Total Buckets: {{ s3_count }}<br>
+                    Public Buckets: {{ public_s3_count }}
+                </p>
+                <a href="{{ url_for('view_s3', account_id=report_data.account_id) }}" class="btn btn-primary">View Details</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">IAM Summary</h5>
+                <p class="card-text">
+                    Total Users: {{ iam_count }}<br>
+                    Users with MFA: {{ mfa_user_count }}
+                </p>
+                <a href="{{ url_for('view_iam', account_id=report_data.account_id) }}" class="btn btn-primary">View Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Security Findings</h5>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Finding</th>
+                                <th>Level</th>
+                                <th>Resources</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for service, findings in report_data.findings.items() %}
+                                {% for finding in findings %}
+                                    <tr>
+                                        <td>{{ service }}</td>
+                                        <td>{{ finding.description }}</td>
+                                        <td>
+                                            <span class="badge bg-{{ 'danger' if finding.level == 'danger' else 'warning' if finding.level == 'warning' else 'info' }}">
+                                                {{ finding.level }}
+                                            </span>
+                                        </td>
+                                        <td>{{ finding.resources|length }}</td>
+                                    </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

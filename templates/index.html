@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Scout Suite Dashboard - Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <h2>Scout Suite Dashboard</h2>
+        <p class="lead">Cloud Security Posture Management</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">EC2 Instances</h5>
+                <p class="card-text">Total instances: {{ ec2_count }}</p>
+                <a href="{{ url_for('view_ec2') }}" class="btn btn-primary">View Details</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">S3 Buckets</h5>
+                <p class="card-text">Total buckets: {{ s3_count }}</p>
+                <a href="{{ url_for('view_s3') }}" class="btn btn-primary">View Details</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">IAM Users</h5>
+                <p class="card-text">Total users: {{ iam_count }}</p>
+                <a href="{{ url_for('view_iam') }}" class="btn btn-primary">View Details</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Recent Scans</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Account Name</th>
+                                <th>Timestamp</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for scan in recent_scans %}
+                            <tr>
+                                <td>{{ scan.account_name }}</td>
+                                <td>{{ scan.timestamp }}</td>
+                                <td>
+                                    <span class="badge bg-{{ scan.status_color }}">
+                                        {{ scan.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if scan.status == 'completed' %}
+                                    <a href="{{ url_for('view_report', account_name=scan.account_name, timestamp=scan.timestamp) }}" 
+                                       class="btn btn-sm btn-info">View Report</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

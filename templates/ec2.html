@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}EC2 Instances{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>EC2 Instances</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <form class="d-flex" id="accountForm">
+            <select class="form-select me-2" id="account_id" name="account_id">
+                <option value="">Select Account</option>
+                {% for account in accounts %}
+                <option value="{{ account.id }}">{{ account.name }} ({{ account.id }})</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Load</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped" id="instancesTable">
+                <thead>
+                    <tr>
+                        <th>Instance ID</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>State</th>
+                        <th>Region</th>
+                        <th>Public IP</th>
+                        <th>Private IP</th>
+                        <th>Launch Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for instance in instances %}
+                    <tr>
+                        <td>{{ instance.instance_id }}</td>
+                        <td>{{ instance.tags.get('Name', '-') }}</td>
+                        <td>{{ instance.instance_type }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if instance.state == 'running' else 'secondary' }}">
+                                {{ instance.state }}
+                            </span>
+                        </td>
+                        <td>{{ instance.region }}</td>
+                        <td>{{ instance.public_ip_address or '-' }}</td>
+                        <td>{{ instance.private_ip_address or '-' }}</td>
+                        <td>{{ instance.launch_time }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#accountForm').on('submit', function(e) {
+        e.preventDefault();
+        const accountId = $('#account_id').val();
+        if (!accountId) return;
+        
+        window.location.href = "{{ url_for('view_ec2') }}?account_id=" + accountId;
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Run Scout Suite Scan{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-body">
+                <h3 class="card-title">Run Scout Suite Scan</h3>
+                <form id="scanForm" method="POST" action="{{ url_for('run_scan') }}">
+                    <div class="mb-3">
+                        <label for="account_name" class="form-label">Account Name *</label>
+                        <input type="text" class="form-control" id="account_name" name="account_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="profile_name" class="form-label">AWS Profile Name</label>
+                        <input type="text" class="form-control" id="profile_name" name="profile_name" value="default">
+                        <div class="form-text">AWS profile name from ~/.aws/credentials</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="region" class="form-label">AWS Region</label>
+                        <select class="form-select" id="region" name="region">
+                            <option value="">All Regions</option>
+                            {% for region in aws_regions %}
+                            <option value="{{ region }}">{{ region }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username">
+                        <div class="form-text">Optional: Used for tracking scan status</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Start Scan</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Scan Status</h5>
+                <div id="scanStatus" class="alert alert-info d-none">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span id="statusText">Initializing scan...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateScanStatus(username) {
+    if (!username) return;
+    
+    $.get('/scout/status/' + username, function(data) {
+        $('#scanStatus').removeClass('d-none');
+        if (data.status === 'completed') {
+            $('#scanStatus').removeClass('alert-info').addClass('alert-success');
+            $('#statusText').text('Scan completed successfully!');
+            $('.spinner-border').hide();
+        } else if (data.status === 'error') {
+            $('#scanStatus').removeClass('alert-info').addClass('alert-danger');
+            $('#statusText').text('Scan failed: ' + data.error);
+            $('.spinner-border').hide();
+        } else {
+            $('#statusText').text('Scan status: ' + data.status);
+            setTimeout(function() {
+                updateScanStatus(username);
+            }, 5000);
+        }
+    }).fail(function() {
+        $('#scanStatus').removeClass('alert-info').addClass('alert-danger');
+        $('#statusText').text('Failed to get scan status');
+        $('.spinner-border').hide();
+    });
+}
+
+$(document).ready(function() {
+    $('#scanForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        $('#submitBtn').prop('disabled', true);
+        $('#scanStatus').removeClass('d-none alert-danger alert-success').addClass('alert-info');
+        $('.spinner-border').show();
+        $('#statusText').text('Initializing scan...');
+        
+        $.ajax({
+            url: $(this).attr('action'),
+            method: 'POST',
+            data: JSON.stringify({
+                account_name: $('#account_name').val(),
+                profile_name: $('#profile_name').val(),
+                region: $('#region').val(),
+                username: $('#username').val()
+            }),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.error) {
+                    $('#scanStatus').removeClass('alert-info').addClass('alert-danger');
+                    $('#statusText').text('Error: ' + response.error);
+                    $('.spinner-border').hide();
+                } else {
+                    updateScanStatus($('#username').val());
+                }
+            },
+            error: function() {
+                $('#scanStatus').removeClass('alert-info').addClass('alert-danger');
+                $('#statusText').text('Failed to start scan');
+                $('.spinner-border').hide();
+                $('#submitBtn').prop('disabled', false);
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

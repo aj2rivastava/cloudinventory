@@ -1,0 +1,151 @@
+import os
+import subprocess
+import traceback
+import sys
+from contextlib import redirect_stdout, redirect_stderr
+
+from django.conf import settings
+
+from common.db_helper import update_cache, update_db_after_scan
+from common import db_helper
+from control_panel.aws_accounts.models import AwsAccounts
+from control_panel.integrations.plugins.slack import send_slack_error
+from .custom_scans import run_custom_scans, initialize_db_for_custom_signature
+
+
+SCOUT_REPORT_DIR = os.path.join(os.path.dirname(__file__), "scout2-report")
+SCOUT_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "ScoutSuite", "Scout.py")
+PYTHON_PATH = settings.PATH_TO_PYTHON
+
+# Customize your logs directory as needed
+SCOUT_LOG_DIR = "/var/log/scout"
+
+
+def _get_last_lines(file_path, num_lines=20):
+    """
+    Return the last `num_lines` lines from the given file_path.
+    If the file is shorter than `num_lines` lines, return all lines.
+    """
+    if not os.path.exists(file_path):
+        return ""
+    with open(file_path, "r") as f:
+        lines = f.read().splitlines()
+        return "\n".join(lines[-num_lines:])
+
+
+def clear_aws_cached_credentials():
+    """
+    Removes cached AWS credentials used for STS AssumeRole after a scan.
+    Cached credentials are removed so that cached credentials that are
+    expiring soon will not be used for a scan, preventing failures.
+    """
+    cache_folder = os.path.join(os.path.expanduser('~'), '.aws', 'cli', 'cache')
+    if not os.path.exists(cache_folder):
+        return
+
+    for file_name in os.listdir(cache_folder):
+        file_path = os.path.join(cache_folder, file_name)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+
+
+@update_cache
+def run_scout_scan(account_name, profile_name, username, scan_flag=None):
+    """
+    Runs the Scout scanner for the given account and profile.
+    Logs output, manages status files, and triggers follow-up scans.
+
+    :param account_name: AWS account name to scan
+    :param profile_name: Profile name (ruleset) for scanning
+    :param username: Username of whoever initiates this scan
+    :param scan_flag: (optional) If truthy, activates certain Scout flags (e.g., "-l" for offline)
+    """
+
+    # Prepare paths for logs/status
+    stdout_log_path = os.path.join(SCOUT_LOG_DIR, f"{username}.out.log.txt")
+    stderr_log_path = os.path.join(SCOUT_LOG_DIR, f"{username}.err.log.txt")
+    status_log_path = os.path.join(SCOUT_LOG_DIR, f"{username}.status.txt")
+    pid_file_path = os.path.join(SCOUT_LOG_DIR, f"{username}.scout_pid")
+
+    # Translate scan_flag to the actual parameter if needed
+    offline_mode_flag = "-l" if scan_flag else None
+
+    # Build the Scout command
+    scout_command = [
+        PYTHON_PATH,
+        SCOUT_SCRIPT_PATH,
+        "aws",
+        "--profile", account_name,
+        "--force",
+        "--no-browser",
+        "--report-dir", SCOUT_REPORT_DIR,
+        "--ruleset", profile_name
+    ]
+    if offline_mode_flag:
+        scout_command.append(offline_mode_flag)
+
+    # Open stdout/stderr logs in append mode
+    with open(stdout_log_path, "a+") as scout_stdout, open(stderr_log_path, "a+") as scout_stderr:
+        # Redirect this function’s print statements to the log files
+        with redirect_stdout(scout_stdout), redirect_stderr(scout_stderr):
+            print(f"{username} has started a Scout scan for the '{account_name}' account using the '{profile_name}' profile.")
+            print(f"Running command: {scout_command}")
+            sys.stdout.flush()
+
+            # Write initial status and PID
+            with open(status_log_path, "w+") as status_file:
+                status_file.write(f"running {account_name} {profile_name}")
+
+            scout_process = subprocess.Popen(
+                scout_command,
+                stdout=scout_stdout,
+                stderr=scout_stderr
+            )
+            with open(pid_file_path, "w") as pid_file:
+                pid_file.write(str(scout_process.pid))
+
+            # Wait for the Scout process to finish
+            scout_process.communicate()
+            return_code = scout_process.poll()
+
+    # Update status / logs post-scan
+    account_id = AwsAccounts.objects.get(account_name=account_name).account_id
+
+    with open(status_log_path, "w") as status_file:
+        try:
+            if return_code == 0:
+                # Success
+                status_file.write("database")
+                update_db_after_scan(account_name)
+                run_custom_scans(account_id, profile_name)
+                print("All scans completed successfully.")
+
+                # Truncate and rewrite status
+                status_file.seek(0)
+                status_file.truncate()
+                status_file.write("completed")
+
+            elif return_code > 0:
+                # Scout error
+                status_file.write("error")
+                # Read last 20 lines of stderr for Slack
+                logs = _get_last_lines(stderr_log_path, 20)
+                send_slack_error(
+                    f"There was an error with the Scout scan:\n"
+                    f"Account ID: {account_id}\n"
+                    f"Account Name: {account_name}\n"
+                    f"Here are the logs:\n\n```{logs}```"
+                )
+
+            else:
+                # Negative return code → forcibly stopped
+                print("\nScan was stopped.")
+                status_file.write("stopped")
+
+        except Exception:
+            traceback.print_exc()
+            status_file.write("error")
+
+    # Clear cached AWS credentials
+    clear_aws_cached_credentials()
+

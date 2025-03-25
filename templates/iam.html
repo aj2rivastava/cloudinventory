@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}IAM Users{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>IAM Users</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <form class="d-flex" id="accountForm">
+            <select class="form-select me-2" id="account_id" name="account_id">
+                <option value="">Select Account</option>
+                {% for account in accounts %}
+                <option value="{{ account.id }}">{{ account.name }} ({{ account.id }})</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Load</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped" id="usersTable">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>ARN</th>
+                        <th>Created</th>
+                        <th>Access Keys</th>
+                        <th>MFA</th>
+                        <th>Password Last Used</th>
+                        <th>Groups</th>
+                        <th>Policies</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.name }}</td>
+                        <td>{{ user.arn }}</td>
+                        <td>{{ user.create_date }}</td>
+                        <td>
+                            {% for key in user.access_keys %}
+                            <span class="badge bg-{{ 'success' if key.status == 'Active' else 'secondary' }}">
+                                {{ key.id }} ({{ key.status }})
+                            </span><br>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if user.mfa_devices else 'danger' }}">
+                                {{ 'Enabled' if user.mfa_devices else 'Disabled' }}
+                            </span>
+                        </td>
+                        <td>{{ user.password_last_used or 'Never' }}</td>
+                        <td>
+                            {% for group in user.groups %}
+                            <span class="badge bg-info">{{ group }}</span><br>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            {% for policy in user.policies %}
+                            <span class="badge bg-primary">{{ policy }}</span><br>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#accountForm').on('submit', function(e) {
+        e.preventDefault();
+        const accountId = $('#account_id').val();
+        if (!accountId) return;
+        
+        window.location.href = "{{ url_for('view_iam') }}?account_id=" + accountId;
+    });
+});
+</script>
+{% endblock %} 

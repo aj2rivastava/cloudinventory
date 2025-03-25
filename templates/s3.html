@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}S3 Buckets{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>S3 Buckets</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <form class="d-flex" id="accountForm">
+            <select class="form-select me-2" id="account_id" name="account_id">
+                <option value="">Select Account</option>
+                {% for account in accounts %}
+                <option value="{{ account.id }}">{{ account.name }} ({{ account.id }})</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Load</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped" id="bucketsTable">
+                <thead>
+                    <tr>
+                        <th>Bucket Name</th>
+                        <th>Region</th>
+                        <th>Creation Date</th>
+                        <th>Versioning</th>
+                        <th>Encryption</th>
+                        <th>Public Access</th>
+                        <th>Logging</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bucket in buckets %}
+                    <tr>
+                        <td>{{ bucket.name }}</td>
+                        <td>{{ bucket.region }}</td>
+                        <td>{{ bucket.CreationDate }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if bucket.versioning_status_enabled else 'warning' }}">
+                                {{ 'Enabled' if bucket.versioning_status_enabled else 'Disabled' }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if bucket.default_encryption_enabled else 'danger' }}">
+                                {{ 'Enabled' if bucket.default_encryption_enabled else 'Disabled' }}
+                            </span>
+                        </td>
+                        <td>
+                            {% set public_access = bucket.public_access_block_configuration %}
+                            {% if public_access and public_access.BlockPublicAcls and public_access.BlockPublicPolicy %}
+                            <span class="badge bg-success">Blocked</span>
+                            {% else %}
+                            <span class="badge bg-danger">Public Access Possible</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if bucket.logging != 'Disabled' else 'warning' }}">
+                                {{ bucket.logging }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#accountForm').on('submit', function(e) {
+        e.preventDefault();
+        const accountId = $('#account_id').val();
+        if (!accountId) return;
+        
+        window.location.href = "{{ url_for('view_s3') }}?account_id=" + accountId;
+    });
+});
+</script>
+{% endblock %} 
